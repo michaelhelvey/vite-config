@@ -106,9 +106,23 @@ const DEFAULT_FMT: UserConfig["fmt"] = {
 };
 
 const DEFAULT_LINT: UserConfig["lint"] = {
+  env: {
+    browser: true,
+    builtin: true,
+    es2024: true,
+    node: true,
+  },
   ignorePatterns: await ignoresFromGitIgnore(),
   plugins: pluginsForCategory("production_node"),
-  rules: rulesForCategory("production_node"),
+  rules: {
+    ...rulesForCategory("production_node"),
+    "typescript/consistent-type-imports": [
+      "error",
+      { fixStyle: "separate-type-imports", prefer: "type-imports" },
+    ],
+    "eslint/no-shadow": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+  },
   overrides: [
     {
       files: ["**/*.tsx"],
