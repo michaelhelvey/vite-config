@@ -1,8 +1,13 @@
 {
   "name": "@michaelhelvey/vite-config",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "sane defaults for vite+",
   "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",

@@ -1,8 +1,6 @@
 # @michaelhelvey/vite-config
 
-Opinionated, shareable [vite-plus](https://github.com/nicolo-ribaudo/vite-plus) defaults for
-TypeScript projects. One import gives you sane formatting, linting, testing, and pre-commit hook
-configuration — no per-project bikeshedding required.
+Opinionated defaults for [Vite+](https://viteplus.dev/).
 
 ## Install
 
@@ -23,51 +21,6 @@ export default defineConfig({
   // override anything you need
 });
 ```
-
-That's it. You now have working `vp fmt`, `vp check`, and `vp test` commands with the defaults
-below, plus a pre-commit hook that runs `vp check --fix` on staged files.
-
-## What's included
-
-### Formatting (`fmt`)
-
-Powered by [oxfmt](https://github.com/nicolo-ribaudo/oxfmt) via vite-plus:
-
-- 100 character print width
-- Semicolons, double quotes, trailing commas
-- 2-space indentation, no tabs
-- Prose wrapping enabled
-- Import sorting (builtin → third-party → everything else)
-
-### Linting (`lint`)
-
-Powered by [oxlint](https://oxc.rs) via vite-plus, with type-aware checking enabled. Rules are
-selected by filtering the full oxlint rule set against a curated combination of plugins and
-categories:
-
-| Preset             | Plugins                                                       | Categories                    |
-| ------------------ | ------------------------------------------------------------- | ----------------------------- |
-| `production_node`  | eslint, oxc, typescript, promise                              | correctness, perf, suspicious |
-| `production_react` | eslint, oxc, typescript, promise, react, react-perf, jsx-a11y | correctness, perf, suspicious |
-| `test`             | eslint, oxc, promise, vitest                                  | correctness                   |
-
-File-level overrides apply automatically:
-
-- `**/*.tsx` files use the `production_react` preset
-- `*/*.test.*` files use the `test` preset
-- Everything else uses `production_node`
-
-Ignore patterns are read from your repository's `.gitignore` at config load time.
-
-### Testing (`test`)
-
-- Pass with no test files
-- Unstub globals and env vars between tests
-- Reset mocks between tests
-
-### Pre-commit (`staged`)
-
-All staged files are run through `vp check --fix` before each commit.
 
 ## Customization
 
