@@ -118,7 +118,7 @@ The rule table in `src/rules.ts` is auto-generated from the
 [oxc rules page](https://oxc.rs/docs/guide/usage/linter/rules.html). To refresh it:
 
 ```sh
-npm run build   # runs scripts/scrape-rules.ts then vp pack
+npm run build:generate   # runs scripts/scrape-rules.ts
 ```
 
 ## License
