@@ -1,0 +1,5 @@
+node_modules
+.vite-hooks
+.DS_Store
+coverage
+dist
