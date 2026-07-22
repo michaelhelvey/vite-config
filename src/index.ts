@@ -122,7 +122,7 @@ export const ruleSelector = (
 // gitRoot...like you're _getting_ the _git_ root, got it, lol, hahaha, see this is how you know
 // this code isn't LLM generated, because LLMs don't have my incredible sense of humor.
 const gitRoot = async () => {
-  const { stdout, exitCode } = await $`git rev-parse --show-toplevel`;
+  const { stdout, exitCode } = await $({ reject: false })`git rev-parse --show-toplevel`;
   if (exitCode !== 0) {
     return { type: "ERROR", code: exitCode } as const;
   }

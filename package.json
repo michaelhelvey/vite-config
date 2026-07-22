@@ -1,6 +1,6 @@
 {
   "name": "@michaelhelvey/vite-config",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "sane configuration format & defaults for vite-plus",
   "license": "MIT",
   "files": [
