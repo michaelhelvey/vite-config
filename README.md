@@ -1,78 +1,75 @@
 # @michaelhelvey/vite-config
 
-Opinionated defaults for [Vite+](https://viteplus.dev/).
+Opinionated defaults and configuration helpers for [VitePlus](https://viteplus.dev/).
 
-## Install
+## Getting Started
 
-```sh
-npm install -D @michaelhelvey/vite-config vite-plus
+Install the package:
+
+```shell
+npm install -D @michaelhelvey/vite-config
 ```
 
-## Usage
+_Or use the package manager of your choice_.
 
-In your `vite.config.ts`:
+Then create your config file at `./vite.config.ts`:
 
-```ts
-import { defineConfig } from "vite-plus";
-import defaults from "@michaelhelvey/vite-config";
+```typescript
+import { defineConfig } from "@michaelhelvey/vite-config";
 
-export default defineConfig({
-  ...defaults,
-  // override anything you need
-});
+export default await defineConfig();
 ```
 
-## Customization
+While this is all you have to do to get (what I consider to be) reasonable defaults for linting,
+formatting, and testing, out of the box, you can also pass in additional options to the
+`defineConfig` function. These options will be deeply merged (using `lodash.merge`) into the base
+configuration, so you don't have to worry about manually spreading defaults:
 
-### Extending the default config
+```typescript
+import { defineConfig, FileTypes } from "@michaelhelvey/vite-config";
 
-Spread the defaults and override individual sections:
-
-```ts
-import { defineConfig } from "vite-plus";
-import defaults from "@michaelhelvey/vite-config";
-
-export default defineConfig({
-  ...defaults,
-  test: {
-    ...defaults.test,
-    passWithNoTests: false,
+export default await defineConfig({
+  lint: {
+    overrides: [
+      {
+        files: FileTypes.JS_SOURCE,
+        rules: {
+          "no-console": "off",
+        },
+      },
+    ],
   },
 });
 ```
 
-### Using lint presets directly
+Note that while I encourage defining everything within `overrides` so as to save your own sanity
+regarding what rules are enabled for what file types, you certainly don't have to do that if you
+want the same rules enabled for everything. Use the
+[oxlint config reference](https://oxc.rs/docs/guide/usage/linter/config.html) for more information.
 
-You can import the rule and plugin helpers to build your own lint config:
+## Helpers
 
-```ts
-import { rulesForCategory, pluginsForCategory } from "@michaelhelvey/vite-config";
+There's a few different helpers defined by the package to help you build your own configuration
+files.
 
-// Get all rules for a preset as { "scope/rule-name": "error" }
-const rules = rulesForCategory("production_react");
+- **FileTypes**: an enumeration of various patterns defining common groupings of files within modern
+  Typescript projects.
+- **RULES**: An exported, strongly-typed list of all oxlint rules. You can iterate over this in
+  order to build up dynamic lists of rules in code rather than statically defining them. See
+  `./src/index.ts` in this project to see what I mean.
+- **ruleSelector**: A function that returns a dictionary of rules for a given set of `categories`
+  and `sources` (where a category is something like "correctness" and a source is something like
+  "eslint").
+- Typescript types corresponding to many of the above, such as `Rule`, `RuleSource`, `RuleCategory`
+  and `RuleName`.
 
-// Get the plugin list for a preset
-const plugins = pluginsForCategory("test");
-```
+You are encouraged to read the source of `./src/index.ts` within this repository for more details.
 
-### Accessing the raw rule data
+## Development
 
-The full scraped oxlint rule table is available as a separate export:
+You can re-generate the rules by scraping the oxlint website by running `bun run build:generate`.
 
-```ts
-import { RULES } from "@michaelhelvey/vite-config/rules";
-```
-
-Each entry includes `scope`, `value`, `category`, `type_aware`, `fix`, `default`, and `docs_url`.
-
-## Updating rules
-
-The rule table in `src/rules.ts` is auto-generated from the
-[oxc rules page](https://oxc.rs/docs/guide/usage/linter/rules.html). To refresh it:
-
-```sh
-npm run build:generate   # runs scripts/scrape-rules.ts
-```
+Publishing is only performed locally.
 
 ## License
 

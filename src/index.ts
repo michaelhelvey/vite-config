@@ -1,158 +1,297 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { $ } from "execa";
+import merge from "lodash.merge";
 import type { UserConfig } from "vite-plus";
+import { DummyRuleMap } from "vite-plus/lint";
 import { RULES } from "./rules.ts";
 
-type OxlintPluginType = (typeof RULES)[number]["scope"];
-type OxlintCategoryType = (typeof RULES)[number]["category"];
-
-interface CustomDefaultsEntry {
-  categories: OxlintCategoryType[];
-  plugins: OxlintPluginType[];
-}
-
-interface CustomDefaults {
-  production_node: CustomDefaultsEntry;
-  production_react: CustomDefaultsEntry;
-  test: CustomDefaultsEntry;
-}
+/**
+ * A single lint rule entry as it appears in the `RULES` collection.
+ *
+ * @example
+ * ```ts
+ * import type { Rule } from "@michaelhelvey/vite-config";
+ *
+ * const rule: Rule = {
+ *   name: "no-console",
+ *   source: "eslint",
+ *   category: "correctness",
+ *   default: false,
+ *   fixable: false,
+ *   version: "v1.33.0",
+ * };
+ * ```
+ */
+export type Rule = (typeof RULES)[number];
 
 /**
- * Mapping from a broad category of code "e.g. nodejs production code" to a list of categories and
- * oxlint plugins to enable.
+ * The plugin or tool that provides a given rule (e.g. `"eslint"`, `"oxc"`, `"typescript"`).
+ *
+ * @example
+ * ```ts
+ * import { ruleSelector, type RuleSource } from "@michaelhelvey/vite-config";
+ *
+ * const sources: RuleSource[] = ["eslint", "oxc"];
+ * const rules = ruleSelector(sources, ["correctness"]);
+ * ```
  */
-export const customOxlintDefaults: CustomDefaults = {
-  production_node: {
-    categories: ["correctness", "perf", "suspicious"],
-    plugins: ["eslint", "oxc", "typescript", "promise"],
-  },
-  production_react: {
-    categories: ["correctness", "perf", "suspicious"],
-    plugins: ["eslint", "oxc", "typescript", "promise", "react", "react-perf", "jsx-a11y"],
-  },
-  test: {
-    categories: ["correctness"],
-    plugins: ["eslint", "oxc", "promise", "vitest"],
-  },
-};
-
-type CustomOxlintCategory = keyof typeof customOxlintDefaults;
+export type RuleSource = Rule["source"];
 
 /**
- * Finds the root of the git repository, then loads any .gitignore files there, then returns a list
- * of glob patterns from it. Doesn't handle GIT_DIR or worktrees or any weird shit.
+ * The category a rule falls under (e.g. `"correctness"`, `"perf"`, `"suspicious"`).
+ *
+ * @example
+ * ```ts
+ * import { ruleSelector, type RuleCategory } from "@michaelhelvey/vite-config";
+ *
+ * const categories: RuleCategory[] = ["correctness", "perf"];
+ * const rules = ruleSelector(["eslint"], categories);
+ * ```
  */
-export const ignoresFromGitIgnore = async (): Promise<string[]> => {
-  const gitRoot = await new Promise<string>((resolve, reject) => {
-    const cp = spawn("git", ["rev-parse", "--show-toplevel"], { stdio: "pipe" });
-    cp.on("error", reject);
+export type RuleCategory = Rule["category"];
 
-    cp.stdout?.on("data", (pathBuf: Buffer) => {
-      resolve(pathBuf.toString("utf-8").trim());
-    });
-  });
+/**
+ * The name of a rule recognized by vite-plus's lint system.
+ *
+ * @example
+ * ```ts
+ * import type { RuleName } from "@michaelhelvey/vite-config";
+ *
+ * const rule: RuleName = "no-console";
+ * ```
+ */
+export type RuleName = keyof DummyRuleMap;
 
-  const gitIgnorePath = path.join(gitRoot, ".gitignore");
-  const gitIgnoreExists = await fs.promises
-    .access(gitIgnorePath, fs.constants.R_OK)
-    .then(() => true)
-    .catch(() => false);
-
-  if (gitIgnoreExists) {
-    const gitIgnoreContents = await fs.promises.readFile(gitIgnorePath, "utf-8");
-    return gitIgnoreContents.split(/\s/);
-  }
-
-  return [];
+type GenericRule = {
+  name: string;
+  source: string;
+  category: string;
+  default: boolean;
+  fixable: boolean;
+  version: string;
 };
 
-export const pluginsForCategory = (category: CustomOxlintCategory) =>
-  customOxlintDefaults[category].plugins;
-export const rulesForCategory = (category: CustomOxlintCategory) => {
-  const rules: Record<string, "error"> = {};
-  const config = customOxlintDefaults[category];
+type AllowWarnDeny = ("allow" | "off" | "warn" | "error" | "deny") | number;
 
-  for (const rule of RULES) {
-    if (config.plugins.includes(rule.scope) && config.categories.includes(rule.category)) {
-      rules[`${rule.scope}/${rule.value}`] = "error";
+/**
+ * Selects the union of a given set of sources and categories. For example, if `sources` is "eslint"
+ * and "oxc", and `categories` is "correctness" and "perf", this will select all the rules for
+ * correctness AND perf where the source is eslint OR oxc.
+ *
+ * @param sources - The rule sources (plugins) to include.
+ * @param categories - The rule categories to include.
+ * @param setting - The severity to apply. Defaults to `"error"`.
+ * @returns A `DummyRuleMap` mapping rule names to the given severity.
+ *
+ * @example
+ * ```ts
+ * import { ruleSelector } from "@michaelhelvey/vite-config";
+ *
+ * // Enable all correctness rules from eslint and oxc as errors:
+ * const rules = ruleSelector(["eslint", "oxc"], ["correctness"]);
+ * // => { "no-console": "error", "oxc/no-console": "error", ... }
+ *
+ * // Disable all suspicious typescript rules for test files:
+ * const testRules = ruleSelector(["typescript"], ["suspicious"], "off");
+ * ```
+ */
+export const ruleSelector = (
+  sources: RuleSource[],
+  categories: RuleCategory[],
+  setting: AllowWarnDeny = "error",
+) => {
+  const rules: GenericRule[] = [];
+
+  for (const r of RULES) {
+    if (categories.includes(r.category) && sources.includes(r.source)) {
+      rules.push(r);
     }
   }
 
-  return rules;
+  return rules.reduce<DummyRuleMap>((a, c) => {
+    if (c.source === "eslint") {
+      a[c.name] = setting;
+    } else {
+      a[`${c.source}/${c.name}`] = setting;
+    }
+    return a;
+  }, {});
 };
 
-const DEFAULT_STAGED: UserConfig["staged"] = {
-  "*": "vp check --fix",
+// gitRoot...like you're _getting_ the _git_ root, got it, lol, hahaha, see this is how you know
+// this code isn't LLM generated, because LLMs don't have my incredible sense of humor.
+const gitRoot = async () => {
+  const { stdout, exitCode } = await $`git rev-parse --show-toplevel`;
+  if (exitCode !== 0) {
+    return { type: "ERROR", code: exitCode } as const;
+  }
+
+  return { type: "ROOT_FOUND", root: stdout.trim() } as const;
 };
 
-const DEFAULT_FMT: UserConfig["fmt"] = {
-  sortImports: {
-    customGroups: [
-      { groupName: "builtin", selector: "builtin" },
-      { groupName: "thirdparty", selector: "external" },
-      { groupName: "everything-else", elementNamePattern: ["*"] },
-    ],
-    newlinesBetween: false,
-    sortPackageJson: true,
-  },
-  printWidth: 100,
-  proseWrap: "always",
-  semi: true,
-  singleQuote: false,
-  tabWidth: 2,
-  trailingComma: "all",
-  useTabs: false,
+const readFile = async (path: string) => {
+  try {
+    const contents = await fs.promises.readFile(path, "utf-8");
+    return { type: "CONTENTS", contents } as const;
+  } catch {
+    return { type: "ERROR" } as const;
+  }
 };
 
-const DEFAULT_LINT: UserConfig["lint"] = {
-  env: {
-    browser: true,
-    builtin: true,
-    es2024: true,
-    node: true,
-  },
-  ignorePatterns: await ignoresFromGitIgnore(),
-  plugins: pluginsForCategory("production_node"),
-  rules: {
-    ...rulesForCategory("production_node"),
-    "typescript/consistent-type-imports": [
-      "error",
-      { fixStyle: "separate-type-imports", prefer: "type-imports" },
-    ],
-    "eslint/no-shadow": "off",
-    "typescript/no-unsafe-type-assertion": "off",
-  },
-  overrides: [
-    {
-      files: ["**/*.tsx"],
-      plugins: pluginsForCategory("production_react"),
-      rules: rulesForCategory("production_react"),
+const ignorePatternsFromGitIgnore = async () => {
+  const gitInfo = await gitRoot();
+  if (gitInfo.type === "ERROR") {
+    return [];
+  }
+
+  const gitIgnorePath = path.join(gitInfo.root, ".gitignore");
+  const gitIgnore = await readFile(gitIgnorePath);
+
+  if (gitIgnore.type === "ERROR") {
+    return [];
+  }
+
+  return gitIgnore.contents.split(/\s/);
+};
+
+/**
+ * Glob patterns for common file categories, intended to be used as `files` values
+ * inside `lint.overrides`.
+ *
+ * @example
+ * ```ts
+ * import { defineConfig, FileTypes } from "@michaelhelvey/vite-config";
+ *
+ * export default defineConfig({
+ *   lint: {
+ *     overrides: [
+ *       { files: FileTypes.JS_SOURCE, rules: { "no-console": "error" } },
+ *       { files: FileTypes.REACT_SOURCE, rules: { "react/jsx-key": "error" } },
+ *       { files: FileTypes.TEST_SOURCE, rules: { "vitest/no-disabled-tests": "error" } },
+ *     ],
+ *   },
+ * });
+ * ```
+ */
+export const FileTypes: Record<string, string[]> = {
+  // The most general case: all javascript code should be matched by this:
+  JS_SOURCE: ["*.ts", "*.tsx", "*.js", ".jsx"],
+  // specifically react(ish) code:
+  REACT_SOURCE: ["*.tsx"],
+  // test code:
+  TEST_SOURCE: ["*.test.tsx", "*.spec.tsx", "*.test.ts", "*.spec.ts"],
+};
+
+/**
+ * Returns a `UserConfig` for `vite-plus` pre-configured with sensible defaults for
+ * testing, linting, formatting, and staged-file checks. Pass an `overrides` object
+ * to deep-merge your own settings on top of the base config.
+ *
+ * @param overrides - Optional partial `UserConfig` to deep-merge into the base config.
+ * @returns A promise that resolves to the final `UserConfig`.
+ *
+ * @example
+ * ```ts
+ * // vite.config.ts
+ * import { defineConfig } from "@michaelhelvey/vite-config";
+ *
+ * export default defineConfig({
+ *   // your overrides here
+ *   test: { environment: "jsdom" },
+ * });
+ * ```
+ */
+export const defineConfig = async (overrides?: UserConfig): Promise<UserConfig> => {
+  const base: UserConfig = {
+    test: {
+      passWithNoTests: true,
+      unstubGlobals: true,
+      unstubEnvs: true,
+      mockReset: true,
     },
-    {
-      files: ["*/*.test.*"],
-      plugins: pluginsForCategory("test"),
-      rules: rulesForCategory("test"),
+    lint: {
+      env: {
+        browser: true,
+        builtin: true,
+        es2024: true,
+        node: true,
+      },
+      options: {
+        typeAware: true,
+        typeCheck: true,
+      },
+      ignorePatterns: await ignorePatternsFromGitIgnore(),
+      overrides: [
+        {
+          files: FileTypes.JS_SOURCE,
+          plugins: ["eslint", "oxc", "typescript", "promise", "unicorn"],
+          rules: {
+            ...ruleSelector(
+              ["eslint", "oxc", "typescript", "promise", "unicorn"],
+              ["correctness", "perf", "suspicious"],
+            ),
+            "typescript/no-misused-promises": "error",
+            "no-shadow": "off",
+            "no-console": "error",
+          },
+        },
+        {
+          files: FileTypes.REACT_SOURCE,
+          plugins: ["react", "react-perf"],
+          rules: {
+            ...ruleSelector(["react"], ["correctness", "perf", "suspicious"]),
+          },
+        },
+        {
+          files: FileTypes.TEST_SOURCE,
+          plugins: ["vitest"],
+          rules: {
+            ...ruleSelector(["vitest"], ["correctness", "perf", "suspicious"]),
+            // suspicious has most of the annoying rules for tests in it, like
+            // no-unsafe-type-assertion etc.
+            ...ruleSelector(["typescript"], ["suspicious"], "off"),
+          },
+        },
+      ],
     },
-  ],
-  options: {
-    typeAware: true,
-    typeCheck: true,
-  },
+    fmt: {
+      sortImports: {
+        customGroups: [
+          { groupName: "builtin", selector: "builtin" },
+          { groupName: "thirdparty", selector: "external" },
+          { groupName: "everything-else", elementNamePattern: ["*"] },
+        ],
+        newlinesBetween: false,
+        sortPackageJson: true,
+      },
+      printWidth: 100,
+      proseWrap: "always",
+      semi: true,
+      singleQuote: false,
+      tabWidth: 2,
+      trailingComma: "all",
+      useTabs: false,
+    },
+    staged: {
+      "*": "vp check --fix",
+    },
+  };
+
+  return merge(base, overrides ?? {});
 };
 
-const DEFAULT_TEST: UserConfig["test"] = {
-  passWithNoTests: true,
-  unstubGlobals: true,
-  unstubEnvs: true,
-  mockReset: true,
-};
-
-const DEFAULT_USER_CONFIG: UserConfig = {
-  staged: DEFAULT_STAGED,
-  fmt: DEFAULT_FMT,
-  lint: DEFAULT_LINT,
-  test: DEFAULT_TEST,
-};
-
-export default DEFAULT_USER_CONFIG;
+/**
+ * The full list of lint rules supported by this configuration, including each rule's
+ * `source` (plugin), `category`, whether it is enabled by `default`, whether it is
+ * `fixable`, and the `version` it was introduced in.
+ *
+ * @example
+ * ```ts
+ * import { RULES, type Rule } from "@michaelhelvey/vite-config";
+ *
+ * const reactRules: Rule[] = RULES.filter((r) => r.source === "react");
+ * const fixablePerfRules = RULES.filter((r) => r.fixable && r.category === "perf");
+ * ```
+ */
+export { RULES };

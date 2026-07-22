@@ -14,64 +14,59 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { $ } from "execa";
+import { JSDOM } from "jsdom";
 import * as z from "zod";
 
-async function getOxcRulesChunkUrl() {
-  const html = await fetch("https://oxc.rs/docs/guide/usage/linter/rules.html").then((r) =>
-    r.text(),
-  );
-  const match = html.match(/\/assets\/chunks\/rules\.[^"]+\.js/);
-  if (!match) throw new Error("Could not find rules chunk URL");
-  return `https://oxc.rs${match[0]}`;
-}
-
-const fixSchema = z.enum([
-  "conditional_dangerous_fix",
-  "conditional_dangerous_fix_or_suggestion",
-  "conditional_fix",
-  "conditional_safe_fix_or_suggestion",
-  "conditional_suggestion",
-  "fixable_dangerous_fix",
-  "fixable_dangerous_fix_or_suggestion",
-  "fixable_dangerous_suggestion",
-  "fixable_fix",
-  "fixable_safe_fix_or_suggestion",
-  "fixable_suggestion",
-  "none",
-  "pending",
-]);
-
 const rulesSchema = z.object({
-  scope: z.string().transform((value) => value.replaceAll("_", "-")),
-  value: z.string(),
+  name: z.string(),
+  source: z.string(),
   category: z.string(),
-  type_aware: z.boolean(),
-  fix: fixSchema,
-  default: z.boolean(),
-  docs_url: z.string(),
+  default: z.boolean().default(false),
+  fixable: z.boolean().default(false),
+  version: z.string(),
 });
 
 type Rule = z.infer<typeof rulesSchema>;
 
-async function extractRulesFromChunkUrl(url: string): Promise<Rule[]> {
+function parseRulesFromHtml(html: string): unknown[] {
+  const parser = new JSDOM(html);
+
+  const ruleElements = parser.window.document.querySelectorAll("table tr");
+  const rules = [];
+
+  for (const ruleEl of ruleElements) {
+    const [name, source, category, isDefault, fixable, version] = Array.from(
+      ruleEl.getElementsByTagName("td"),
+    ).map((e) => e.textContent.replaceAll("💭", ""));
+
+    if (!name) continue;
+
+    rules.push({
+      name,
+      source,
+      category,
+      default: Boolean(isDefault?.trim()),
+      fixable: Boolean(fixable?.trim()),
+      version,
+    });
+  }
+
+  return rules;
+}
+
+async function extractRulesFromPage(url: string): Promise<Rule[]> {
   const response = await fetch(url);
   assert.ok(response.ok);
   assert.ok(response.status === 200);
 
-  const js = await response.text();
+  const html = await response.text();
 
-  const matcher = new RegExp("JSON\\.parse\\(`(.*)`", "gms");
-  const match = matcher.exec(js);
-  assert.ok(match);
-  assert.ok(match[1]);
-
-  const raw = JSON.parse(match[1]) as unknown;
+  const raw = parseRulesFromHtml(html);
   return rulesSchema.array().parse(raw);
 }
 
 async function main() {
-  const rulesChunkUrl = await getOxcRulesChunkUrl();
-  const json = await extractRulesFromChunkUrl(rulesChunkUrl);
+  const json = await extractRulesFromPage("https://oxc.rs/docs/guide/usage/linter/rules.html");
 
   const rulesFilePath = path.join(process.cwd(), "src/rules.ts");
   await fs.promises.writeFile(

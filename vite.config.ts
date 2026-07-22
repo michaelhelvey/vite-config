@@ -1,13 +1,15 @@
-import { defineConfig } from "vite-plus";
-import defaultViteConfig from "./src/index.ts";
+import { defineConfig } from "./src/index.ts";
 
-export default defineConfig({
+export default await defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  ...defaultViteConfig,
+  lint: {
+    ignorePatterns: ["**/fixtures/**"],
+  },
   pack: {
-    entry: ["src/index.ts", "src/rules.ts"],
+    entry: ["src/index.ts"],
+    platform: "node",
     dts: true,
     format: ["esm"],
     sourcemap: true,

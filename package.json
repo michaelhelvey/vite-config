@@ -1,17 +1,17 @@
 {
   "name": "@michaelhelvey/vite-config",
-  "version": "1.0.2",
-  "description": "sane defaults for vite+",
+  "version": "2.0.0",
+  "description": "sane configuration format & defaults for vite-plus",
   "license": "MIT",
   "files": [
     "dist",
     "README.md",
-    "package.json"
+    "package.json",
+    "LICENSE"
   ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
-    "./rules": "./dist/rules.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -23,13 +23,21 @@
     "fmt": "vp fmt",
     "test": "vp test"
   },
+  "dependencies": {
+    "execa": "^10.0.0",
+    "lodash.merge": "^4.6.2"
+  },
   "devDependencies": {
-    "@types/node": "^25.5.0",
-    "execa": "^9.6.1",
-    "typescript": "^6.0.2",
-    "zod": "^4.3.6"
+    "@types/jsdom": "^28.0.3",
+    "@types/lodash.merge": "^4.6.9",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.8",
+    "typescript": "^7.0.2",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "vite-plus": "^0.1.14"
+    "vite-plus": "^0.2.5"
   }
 }
