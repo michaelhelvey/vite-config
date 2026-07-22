@@ -174,7 +174,7 @@ const ignorePatternsFromGitIgnore = async () => {
  * });
  * ```
  */
-export const FileTypes: Record<string, string[]> = {
+export const FileTypes = {
   // The most general case: all javascript code should be matched by this:
   JS_SOURCE: ["*.ts", "*.tsx", "*.js", ".jsx"],
   // specifically react(ish) code:
@@ -211,6 +211,11 @@ export const defineConfig = async (overrides?: UserConfig): Promise<UserConfig> 
       mockReset: true,
     },
     lint: {
+      settings: {
+        react: {
+          version: "19.2.8",
+        },
+      },
       env: {
         browser: true,
         builtin: true,
@@ -241,6 +246,7 @@ export const defineConfig = async (overrides?: UserConfig): Promise<UserConfig> 
           plugins: ["react", "react-perf"],
           rules: {
             ...ruleSelector(["react"], ["correctness", "perf", "suspicious"]),
+            "react/react-in-jsx-scope": "off",
           },
         },
         {
