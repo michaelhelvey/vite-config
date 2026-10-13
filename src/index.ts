@@ -264,7 +264,7 @@ export const defineConfig = async (overrides?: UserConfig): Promise<UserConfig> 
     fmt: {
       sortImports: {
         customGroups: [
-          { groupName: "builtin", selector: "builtin" },
+          { groupName: "builtins", selector: "builtin" },
           { groupName: "thirdparty", selector: "external" },
           { groupName: "everything-else", elementNamePattern: ["*"] },
         ],
