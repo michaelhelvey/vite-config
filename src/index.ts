@@ -176,17 +176,77 @@ const ignorePatternsFromGitIgnore = async () => {
  */
 export const FileTypes = {
   // The most general case: all javascript code should be matched by this:
-  JS_SOURCE: ["*.ts", "*.tsx", "*.js", ".jsx"],
+  JS_SOURCE: ["*.ts", "*.tsx", "*.js", "*.jsx"],
   // specifically react(ish) code:
   REACT_SOURCE: ["*.tsx"],
   // test code:
   TEST_SOURCE: ["*.test.tsx", "*.spec.tsx", "*.test.ts", "*.spec.ts"],
 };
 
+type LintOverride = NonNullable<NonNullable<UserConfig["lint"]>["overrides"]>[number];
+
+const matchesFile = (files: readonly string[] | undefined, target: readonly string[]) =>
+  (files ?? []).some((file) => target.includes(file));
+
+/**
+ * Enables the plugins that already apply to the files of the override.
+ *
+ * Oxlint applies a rule in an override only if the same override also enables the plugin of that
+ * rule. A user override usually omits `plugins`, because a base override already enables them for
+ * the same files. This function copies those plugin names into the override, so the user rule takes
+ * effect. Plugins that no base override enables for these files stay absent. Declare them yourself
+ * in that case.
+ */
+const withBasePlugins = (base: UserConfig, override: LintOverride): LintOverride => {
+  const inherited = (base.lint?.overrides ?? [])
+    .filter((candidate) => matchesFile(candidate.files, override.files))
+    .flatMap((candidate) => candidate.plugins ?? []);
+  const plugins = [...new Set([...inherited, ...(override.plugins ?? [])])];
+
+  return plugins.length === 0 ? override : { ...override, plugins };
+};
+
+/**
+ * Merges the base config and the user config.
+ *
+ * `lodash.merge` merges arrays by index. That behavior is wrong for `lint.overrides`: if the user
+ * override at index 1 sets a rule to `"off"`, the base override at index 2 can set the same rule
+ * back to `"error"`, because oxlint uses the last override that matches. The base config owns
+ * indices 0 to 2, so a user override would merge into the React override and lose.
+ *
+ * This helper appends the user overrides after the base overrides. A user rule then always comes
+ * last, so it wins. The helper also enables the plugins that already apply to the files of the
+ * override, because oxlint ignores a rule in an override that does not enable its plugin.
+ */
+const mergeUserConfig = (base: UserConfig, overrides?: UserConfig): UserConfig => {
+  const userOverrides = overrides?.lint?.overrides;
+
+  if (!userOverrides) {
+    return merge(base, overrides ?? {});
+  }
+
+  // `lodash.merge` skips a source value of `undefined`, so the base overrides stay untouched.
+  const merged: UserConfig = merge(base, {
+    ...overrides,
+    lint: { ...overrides?.lint, overrides: undefined },
+  });
+
+  merged.lint = {
+    ...merged.lint,
+    overrides: [
+      ...(base.lint?.overrides ?? []),
+      ...userOverrides.map((o) => withBasePlugins(base, o)),
+    ],
+  };
+
+  return merged;
+};
+
 /**
  * Returns a `UserConfig` for `vite-plus` pre-configured with sensible defaults for
  * testing, linting, formatting, and staged-file checks. Pass an `overrides` object
- * to deep-merge your own settings on top of the base config.
+ * to deep-merge your own settings on top of the base config. Entries in
+ * `lint.overrides` are appended after the base entries, so a user entry always wins.
  *
  * @param overrides - Optional partial `UserConfig` to deep-merge into the base config.
  * @returns A promise that resolves to the final `UserConfig`.
@@ -284,7 +344,7 @@ export const defineConfig = async (overrides?: UserConfig): Promise<UserConfig> 
     },
   };
 
-  return merge(base, overrides ?? {});
+  return mergeUserConfig(base, overrides);
 };
 
 /**

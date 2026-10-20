@@ -47,6 +47,36 @@ regarding what rules are enabled for what file types, you certainly don't have t
 want the same rules enabled for everything. Use the
 [oxlint config reference](https://oxc.rs/docs/guide/usage/linter/config.html) for more information.
 
+### Lint override order
+
+`lodash.merge` merges arrays by index, which gives the wrong order for `lint.overrides`. This
+package appends your `lint.overrides` entries after its own entries instead. Oxlint uses the last
+override that matches a file, so a rule in your override always wins:
+
+```typescript
+import { defineConfig, FileTypes } from "@michaelhelvey/vite-config";
+
+export default await defineConfig({
+  lint: {
+    overrides: [
+      {
+        // This entry comes after the built-in test override, so the rule is off.
+        files: FileTypes.TEST_SOURCE,
+        rules: { "vitest/no-standalone-expect": "off" },
+      },
+    ],
+  },
+});
+```
+
+A base override is never replaced. If you set a rule that a base override also sets, both values
+stay in the config and the later value (yours) wins.
+
+The package also enables the plugins that already apply to the files of your override, for example
+`vitest` for a `FileTypes.TEST_SOURCE` entry. Oxlint applies a rule in an override only if the same
+override also enables the plugin of that rule. If no base override enables a plugin for your files,
+declare it yourself with `plugins`.
+
 ## Helpers
 
 There's a few different helpers defined by the package to help you build your own configuration
